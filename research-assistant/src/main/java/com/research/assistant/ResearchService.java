@@ -1,5 +1,6 @@
 package com.research.assistant;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -15,9 +16,12 @@ public class ResearchService {
     private String geminiApiKey;
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
 
-    public ResearchService(WebClient.Builder webClientBuilder) {
+    public ResearchService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
         this.webClient = webClientBuilder.build();
+
+        this.objectMapper = objectMapper;
     }
 
     public String processContent(ResearchRequest request){
@@ -36,7 +40,24 @@ public class ResearchService {
                .retrieve().bodyToMono(String.class).block();
        //parse the response
        //return response
-        return response;
+        return extractTextFromResponse(response);
+   }
+
+   private String extractTextFromResponse(String response){
+        try{
+    GeminiResponse geminiResponse=objectMapper.readValue(response, GeminiResponse.class);
+    if(geminiResponse.getCandidates() != null && !geminiResponse.getCandidates().isEmpty()){
+    GeminiResponse.Candidate firstCandidate=geminiResponse.getCandidates().get(0);
+    if(firstCandidate.getContent() != null &&
+            firstCandidate.getContent().getParts() != null &&
+    !firstCandidate.getContent().getParts().isEmpty()){
+    return firstCandidate.getContent().getParts().get(0).getText();
+    }
+    }
+    return "no content found";
+        }catch(Exception e){
+            return "Error parsing: "+ e.getMessage();
+        }
    }
 
    private String buildPrompt(ResearchRequest request){
